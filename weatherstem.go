@@ -79,30 +79,34 @@ type StationInfo struct {
 // "sensor_type": "Solar Radiation Sensor",
 // "sensor_type": "UV Radiation Sensor"
 type WeatherData struct {
-	Station       [3]string
-	StationTopo   haversine.Coord
-	Temperature   [5]float64
-	Humidity      float64
-	Windspeed     [3]float64
-	Wind          [2]string
-	Pressure      float64
-	PressureTrend string
-	Rain          [2]float64
-	Sun           [2]float64
+	Label         string `json:"label"`
+	Station       [3]string `json:"stations"`
+	StationTopo   haversine.Coord `json:"topo"`
+	Temperature   [5]float64 `json:"temp"`
+	Humidity      float64 `json:"humidity"`
+	Windspeed     [3]float64 `json:"windspeed"`
+	Wind          [2]string `json:"wind"`
+	Pressure      float64 `json:"pressure"`
+	PressureTrend string `json:"ptrend"`
+	Rain          [2]float64 `json:"rain"`
+	Sun           [2]float64 `json:"sun"`
 }
 
 // WeatherUnits are the measurement units for the WeatherData values
 type WeatherUnits struct {
-	Station       [3]string
-	StationTopo   string
-	Temperature   [5]string
-	Humidity      string
-	Windspeed     [3]string
-	Wind          [2]string
-	Pressure      string
-	PressureTrend string
-	Rain          [2]string
-	Sun           [2]string
+	Label         string `json:"label"`
+	Station       [3]string `json:"stations"`
+	StationTopo   struct {
+			Lat string
+			Lon string} `json:"topo"`
+	Temperature   [5]string `json:"temp"`
+	Humidity      string `json:"humidity"`
+	Windspeed     [3]string `json:"windspeed"`
+	Wind          [2]string `json:"wind"`
+	Pressure      string `json:"pressure"`
+	PressureTrend string `json:"ptrend"`
+	Rain          [2]string `json:"rain"`
+	Sun           [2]string `json:"sun"`
 }
 
 // ReadingInfo struct
@@ -157,13 +161,16 @@ type configSettings struct {
 
 // PopulateWeatherData accepts the raw result and it returns the converted structured data
 // This is a rather static implementation. Bigger brains do this better.
-func PopulateWeatherData(winfo *WeatherInfo) (wdata WeatherData, wunits WeatherUnits) {
+func PopulateWeatherData(winfo *WeatherInfo, rose bool) (wdata WeatherData, wunits WeatherUnits) {
+	wdata.Label = "data"
 	wdata.Station[0] = winfo.WeatherStation.Handle
 	wdata.Station[1] = winfo.WeatherStation.Name
 	wdata.Station[2] = winfo.WeatherRecord.ReadingsTimestamp
 	wdata.StationTopo.Lat, _ = strconv.ParseFloat(winfo.WeatherStation.Latitude, 64)
 	wdata.StationTopo.Lon, _ = strconv.ParseFloat(winfo.WeatherStation.Longitude, 64)
-	wunits.StationTopo = "°"
+	wunits.Label = "units"
+	wunits.StationTopo.Lat = "&deg;"
+	wunits.StationTopo.Lon = "&deg;"
 	// now loop through the readings and do the conversions
 	for _, val := range winfo.WeatherRecord.RecordReadings {
 		if val.SensorType == "Thermometer" { // Temps
@@ -193,7 +200,11 @@ func PopulateWeatherData(winfo *WeatherInfo) (wdata WeatherData, wunits WeatherU
 		} else if val.SensorType == "Wind Vane" {
 			wdata.Windspeed[2], _ = strconv.ParseFloat(val.Value, 64)
 			wunits.Windspeed[2] = val.UnitSymbol
+			if rose {
+			wdata.Wind[0], wdata.Wind[1] = compassrose.DegreeToHeading(float32(wdata.Windspeed[2]), 3, true)
+			} else {
 			wdata.Wind[0], wdata.Wind[1] = compassrose.DegreeToHeading(float32(wdata.Windspeed[2]), 3, false)
+			}
 		} else if val.SensorType == "Barometer" { // Pressure
 			wdata.Pressure, _ = strconv.ParseFloat(val.Value, 64)
 			wunits.Pressure = val.UnitSymbol
@@ -321,22 +332,33 @@ func getWeatherInfoFromWeb(c *configSettings) ([]byte, error) {
 }
 
 // PrintWeatherDataJSON shows the data for a station
-func (data *WeatherData) PrintWeatherDataJSON() {
-	var jdata []byte
-	jdata, err := json.Marshal(data)
+func (data *WeatherData) PrintWeatherDataJSON(units *WeatherUnits) {
+	var jdata, junits []byte
+	var err error
+	jdata, err = json.Marshal(data)
 	if err != nil {
-		log.Println("Cannot marshal data")
+		log.Println("Cannot marshal weather info", err)
+		// return err
+	}
+
+	junits, err = json.Marshal(units)
+	if err != nil {
+		log.Println("Cannot marshal unit info", err)
+		// return err
 	}
 
 	fmt.Printf("%s\n", string(jdata))
+	fmt.Printf("%s\n", string(junits))
 }
 
 // PrintWeatherInfoJSON shows the data for a station
 func (data *WeatherInfo) PrintWeatherInfoJSON() {
 	var jdata []byte
-	jdata, err := json.Marshal(data)
+	var err error
+	jdata, err = json.Marshal(data)
 	if err != nil {
-		log.Println("Cannot marshal data")
+		log.Println("Cannot marshal weather data", err)
+		// return err
 	}
 
 	fmt.Printf("%s\n", string(jdata))
@@ -371,12 +393,13 @@ func main() {
 		err                    error
 		weatherArr             []WeatherInfo
 		myConfig               configSettings
-		outputJSON, outputOrig bool
+		outputJSON, outputOrig, rose bool
 	)
 
 	// Get the commandline flags
 	flag.BoolVar(&outputJSON, "json", false, "Output cooked data as JSON")
 	flag.BoolVar(&outputOrig, "orig", false, "Output original API results")
+	flag.BoolVar(&rose, "rose", false, "Output boring compass rose directions")
 	flag.Parse()
 
 	// Get API and stations from the configuration file in the current directory or HOME directory
@@ -407,7 +430,7 @@ func main() {
 	dataArr := make([]WeatherData, len(weatherArr))
 	unitArr := make([]WeatherUnits, len(weatherArr))
 	for idx, stationData := range weatherArr {
-		dataArr[idx], unitArr[idx] = PopulateWeatherData(&stationData)
+		dataArr[idx], unitArr[idx] = PopulateWeatherData(&stationData, rose)
 	}
 
 	// Show the original raw info
@@ -420,7 +443,7 @@ func main() {
 		// Show the cooked data
 		for i := 0; i < len(dataArr); i++ {
 			if outputJSON {
-				dataArr[i].PrintWeatherDataJSON()
+				dataArr[i].PrintWeatherDataJSON(&unitArr[i])
 			} else {
 				dataArr[i].PrintWeatherDataUnits(&unitArr[i])
 			}
