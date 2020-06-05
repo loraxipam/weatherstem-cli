@@ -285,10 +285,21 @@ func (config *configSettings) getConfigSettings(inputFile string) (err error) {
 	}
 
 	if configVersion == configSettingsVersion {
-
 		err = json.Unmarshal(configJSON, &config)
 		if err != nil {
 			log.Panicln("Cannot unmarshal config", inputFile)
+		}
+	} else if configVersion <= configSettingsVersion {
+		log.Printf("WARNING: Using a version %s config file in a version %s app. Your location could become NYC.\n", configVersion, configSettingsVersion)
+		err = json.Unmarshal(configJSON, &config)
+		if err != nil {
+			log.Panicln("Cannot unmarshal config", inputFile)
+		}
+		if config.Me.Lat == 0.0 {
+			config.Me.Lat = 40.7678
+		}
+		if config.Me.Lon == 0.0 {
+			config.Me.Lon = -73.9814
 		}
 	} else {
 		log.Panicf("Config version mismatch, %v should be %v\n", configVersion, configSettingsVersion)
