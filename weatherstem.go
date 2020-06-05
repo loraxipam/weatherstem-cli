@@ -5,11 +5,12 @@ package main
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"flag"
 	"html"
 	"log"
 	"strconv"
+
+	json "github.com/json-iterator/go"
 
 	"github.com/loraxipam/haversine"
 
@@ -33,6 +34,9 @@ type WeatherInfo struct {
 }
 
 // RecordInfo struct
+// Currently (June 2020), weatherSTEM has a formatting problem on the output of the JSON
+// when a station is "down" -- all numeric scalars become numbers instead of the usual
+// string. This kills the unmarshalling so expect errors once in a while.
 type RecordInfo struct {
 	RecordReadings    []ReadingInfo `json:"readings"`
 	LastRainTime      string        `json:"last_rain_time"`
@@ -79,32 +83,33 @@ type StationInfo struct {
 // "sensor_type": "Solar Radiation Sensor",
 // "sensor_type": "UV Radiation Sensor"
 type WeatherData struct {
-	Label         string `json:"label"`
-	Station       [3]string `json:"stations"`
+	Label         string          `json:"label"`
+	Station       [3]string       `json:"stations"`
 	StationTopo   haversine.Coord `json:"topo"`
-	Temperature   [5]float64 `json:"temp"`
-	Humidity      float64 `json:"humidity"`
-	Windspeed     [3]float64 `json:"windspeed"`
-	Wind          [2]string `json:"wind"`
-	Pressure      float64 `json:"pressure"`
-	PressureTrend string `json:"ptrend"`
-	Rain          [2]float64 `json:"rain"`
-	Sun           [2]float64 `json:"sun"`
+	Temperature   [5]float64      `json:"temp"`
+	Humidity      float64         `json:"humidity"`
+	Windspeed     [3]float64      `json:"windspeed"`
+	Wind          [2]string       `json:"wind"`
+	Pressure      float64         `json:"pressure"`
+	PressureTrend string          `json:"ptrend"`
+	Rain          [2]float64      `json:"rain"`
+	Sun           [2]float64      `json:"sun"`
 }
 
 // WeatherUnits are the measurement units for the WeatherData values
 type WeatherUnits struct {
-	Label         string `json:"label"`
-	Station       [3]string `json:"stations"`
-	StationTopo   struct {
-			Lat string
-			Lon string} `json:"topo"`
+	Label       string    `json:"label"`
+	Station     [3]string `json:"stations"`
+	StationTopo struct {
+		Lat string
+		Lon string
+	} `json:"topo"`
 	Temperature   [5]string `json:"temp"`
-	Humidity      string `json:"humidity"`
+	Humidity      string    `json:"humidity"`
 	Windspeed     [3]string `json:"windspeed"`
 	Wind          [2]string `json:"wind"`
-	Pressure      string `json:"pressure"`
-	PressureTrend string `json:"ptrend"`
+	Pressure      string    `json:"pressure"`
+	PressureTrend string    `json:"ptrend"`
 	Rain          [2]string `json:"rain"`
 	Sun           [2]string `json:"sun"`
 }
@@ -201,9 +206,9 @@ func PopulateWeatherData(winfo *WeatherInfo, rose bool) (wdata WeatherData, wuni
 			wdata.Windspeed[2], _ = strconv.ParseFloat(val.Value, 64)
 			wunits.Windspeed[2] = val.UnitSymbol
 			if rose {
-			wdata.Wind[0], wdata.Wind[1] = compassrose.DegreeToHeading(float32(wdata.Windspeed[2]), 3, true)
+				wdata.Wind[0], wdata.Wind[1] = compassrose.DegreeToHeading(float32(wdata.Windspeed[2]), 3, true)
 			} else {
-			wdata.Wind[0], wdata.Wind[1] = compassrose.DegreeToHeading(float32(wdata.Windspeed[2]), 3, false)
+				wdata.Wind[0], wdata.Wind[1] = compassrose.DegreeToHeading(float32(wdata.Windspeed[2]), 3, false)
 			}
 		} else if val.SensorType == "Barometer" { // Pressure
 			wdata.Pressure, _ = strconv.ParseFloat(val.Value, 64)
@@ -223,8 +228,7 @@ func PopulateWeatherData(winfo *WeatherInfo, rose bool) (wdata WeatherData, wuni
 		} else if val.SensorType == "UV Radiation Sensor" {
 			wdata.Sun[1], _ = strconv.ParseFloat(val.Value, 64)
 			wunits.Sun[1] = val.UnitSymbol
-		}
-
+		} // else ignore the unknown
 	}
 
 	return wdata, wunits
@@ -253,11 +257,11 @@ func findConfigSettings(config *configSettings) (err error) {
 // get API user config settings from a file
 func (config *configSettings) getConfigSettings(inputFile string) (err error) {
 	readFile, err := os.Open(inputFile)
-	defer readFile.Close()
 	if err != nil {
 		// trying to open a non-existent file is not a panic
 		return err
 	}
+	defer readFile.Close()
 
 	configJSON, err := ioutil.ReadAll(readFile)
 	if err != nil {
@@ -291,8 +295,8 @@ func (config *configSettings) getConfigSettings(inputFile string) (err error) {
 // get weather data from some file, if you want to test things locally
 func getWeatherInfoFromSomeFile(inputFile string) ([]byte, error) {
 	readFile, _ := os.Open(inputFile)
-	usualCallBody, err := ioutil.ReadAll(readFile)
 	defer readFile.Close()
+	usualCallBody, err := ioutil.ReadAll(readFile)
 	return usualCallBody, err
 }
 
@@ -312,16 +316,16 @@ func getWeatherInfoFromWeb(c *configSettings) ([]byte, error) {
 	apiURL := c.URL
 	// and the contents of the request. My local station data from the config file's stations array. Je suis hackeur.
 	requestBody := `{"api_key":"` + c.Key + `","stations":["` + strings.Join(c.Stations, `","`) + `"]}`
+	// requestBody is sorta like: {"api_key":"polyshazbotmicrofish","stations":["ponceinlet","fswndaytonabch"]}
 
-	// requestBody = `{"api_key":"polyshazbotmicrofish","stations":["ponceinlet","fswndaytonabch"]}`
 	body := strings.NewReader(requestBody)
 
 	// Make the call
 	responseBody, error := client.Post(apiURL, "application/json", body)
-
 	if error != nil {
 		return nil, error
 	}
+
 	// Close the session once we're done
 	defer responseBody.Body.Close()
 
@@ -389,10 +393,10 @@ func (data *WeatherData) PrintWeatherDataUnits(wu *WeatherUnits) {
 func main() {
 
 	var (
-		weatherBytes           []byte
-		err                    error
-		weatherArr             []WeatherInfo
-		myConfig               configSettings
+		weatherBytes                 []byte
+		err                          error
+		weatherArr                   []WeatherInfo
+		myConfig                     configSettings
 		outputJSON, outputOrig, rose bool
 	)
 
