@@ -17,7 +17,7 @@ FYI, if you run it with no config file, it will complain and show you an example
 
 ## Options
 
-If you want to just see it on the screen, just run it. If you want to see the full gory details of the complete API call, use the `-orig` flag. If for some reason you want to see the cmd line version in JSON, you can use the `-json` flag.
+If you want to just see it on the screen, just run it. If you want to see the full gory details of the complete API call, use the `-orig` flag. If for some reason you want to see the cmd line version in JSON, you can use the `-json` flag. If you want boring compass rose directions, use `-rose`.
 
 #### Notes
 
