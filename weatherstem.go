@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	configSettingsVersion = "1.0"
+	configSettingsVersion = "2.0"
 )
 
 // WeatherInfo struct
@@ -86,6 +86,7 @@ type WeatherData struct {
 	Label         string          `json:"label"`
 	Station       [3]string       `json:"stations"`
 	StationTopo   haversine.Coord `json:"topo"`
+	StationDist   float64         `json:"distance"`
 	Temperature   [5]float64      `json:"temp"`
 	Humidity      float64         `json:"humidity"`
 	Windspeed     [3]float64      `json:"windspeed"`
@@ -101,9 +102,10 @@ type WeatherUnits struct {
 	Label       string    `json:"label"`
 	Station     [3]string `json:"stations"`
 	StationTopo struct {
-		Lat string
-		Lon string
+		Lat string `json:"lat"`
+		Lon string `json:"lon"`
 	} `json:"topo"`
+	StationDist   string    `json:"distance"`
 	Temperature   [5]string `json:"temp"`
 	Humidity      string    `json:"humidity"`
 	Windspeed     [3]string `json:"windspeed"`
@@ -151,17 +153,19 @@ type CameraInfo struct {
 }
 
 // weatherSTEM API user config settings, ala:
-// {"version": "1.0",
+// {"version": "2.0",
 // "api_url": "https://volusia.weatherstem.com/api",
 // "api_key": "happy3solar9fly",
 // "stations": ["ponceinlet","fswndaytonabch"]
+// "me": {"lat":29.13,"lon":-80.95}
 // }
 // See weatherstem API page for details.
 type configSettings struct {
-	Version  string   `json:"version"`
-	URL      string   `json:"api_url"`
-	Key      string   `json:"api_key"`
-	Stations []string `json:"stations"`
+	Version  string          `json:"version"`
+	URL      string          `json:"api_url"`
+	Key      string          `json:"api_key"`
+	Stations []string        `json:"stations"`
+	Me       haversine.Coord `json:"me,omitempty"`
 }
 
 // PopulateWeatherData accepts the raw result and it returns the converted structured data
@@ -173,6 +177,7 @@ func PopulateWeatherData(winfo *WeatherInfo, rose bool) (wdata WeatherData, wuni
 	wdata.Station[2] = winfo.WeatherRecord.ReadingsTimestamp
 	wdata.StationTopo.Lat, _ = strconv.ParseFloat(winfo.WeatherStation.Latitude, 64)
 	wdata.StationTopo.Lon, _ = strconv.ParseFloat(winfo.WeatherStation.Longitude, 64)
+	wdata.StationDist = 2.4
 	wunits.Label = "units"
 	wunits.StationTopo.Lat = "&deg;"
 	wunits.StationTopo.Lon = "&deg;"
@@ -280,10 +285,21 @@ func (config *configSettings) getConfigSettings(inputFile string) (err error) {
 	}
 
 	if configVersion == configSettingsVersion {
-
 		err = json.Unmarshal(configJSON, &config)
 		if err != nil {
 			log.Panicln("Cannot unmarshal config", inputFile)
+		}
+	} else if configVersion <= configSettingsVersion {
+		log.Printf("WARNING: Using a version %s config file in a version %s app. Your location could become NYC.\n", configVersion, configSettingsVersion)
+		err = json.Unmarshal(configJSON, &config)
+		if err != nil {
+			log.Panicln("Cannot unmarshal config", inputFile)
+		}
+		if config.Me.Lat == 0.0 {
+			config.Me.Lat = 40.7678
+		}
+		if config.Me.Lon == 0.0 {
+			config.Me.Lon = -73.9814
 		}
 	} else {
 		log.Panicf("Config version mismatch, %v should be %v\n", configVersion, configSettingsVersion)
@@ -371,7 +387,7 @@ func (data *WeatherInfo) PrintWeatherInfoJSON() {
 // PrintWeatherData shows the data for a station
 func (data *WeatherData) PrintWeatherData() {
 
-	fmt.Println(data.Station[1], "("+data.Station[0]+")", data.Station[2])
+	fmt.Println(data.Station[1], "("+data.Station[0]+")", data.Station[2], data.StationDist)
 	fmt.Println(" ", " T:", data.Temperature[0], "DP:", data.Temperature[1], "H:", data.Humidity)
 	fmt.Println(" ", "WB:", data.Temperature[2], "WC:", data.Temperature[3], "HI:", data.Temperature[4])
 	fmt.Println(" ", " P:", data.Pressure, data.PressureTrend)
@@ -382,7 +398,7 @@ func (data *WeatherData) PrintWeatherData() {
 // PrintWeatherDataUnits shows the data for a station along with its units
 func (data *WeatherData) PrintWeatherDataUnits(wu *WeatherUnits) {
 
-	fmt.Println(data.Station[1], "("+data.Station[0]+")", data.Station[2])
+	fmt.Printf("%s (%s) %.2f%s %s\n", data.Station[1], data.Station[0], data.StationDist, wu.StationDist, data.Station[2])
 	fmt.Printf(" T: %-.1f%s DP: %-.1f%s H: %.1f%s\n", data.Temperature[0], html.UnescapeString(wu.Temperature[0]), data.Temperature[1], html.UnescapeString(wu.Temperature[1]), data.Humidity, "%")
 	fmt.Printf("WB: %-.1f%s WC: %-.1f%s HI: %-.1f%s\n", data.Temperature[2], html.UnescapeString(wu.Temperature[2]), data.Temperature[3], html.UnescapeString(wu.Temperature[3]), data.Temperature[4], html.UnescapeString(wu.Temperature[4]))
 	fmt.Printf(" P: %.3f%s [%.2fmbar] %v\n", data.Pressure, wu.Pressure, data.Pressure*33.86386, data.PressureTrend) // Major assumption here!
@@ -393,24 +409,25 @@ func (data *WeatherData) PrintWeatherDataUnits(wu *WeatherUnits) {
 func main() {
 
 	var (
-		weatherBytes                 []byte
-		err                          error
-		weatherArr                   []WeatherInfo
-		myConfig                     configSettings
-		outputJSON, outputOrig, rose bool
+		weatherBytes                       []byte
+		err                                error
+		weatherArr                         []WeatherInfo
+		myConfig                           configSettings
+		outputJSON, outputOrig, rose, kilo bool
 	)
 
 	// Get the commandline flags
 	flag.BoolVar(&outputJSON, "json", false, "Output cooked data as JSON")
 	flag.BoolVar(&outputOrig, "orig", false, "Output original API results")
 	flag.BoolVar(&rose, "rose", false, "Output boring compass rose directions")
+	flag.BoolVar(&kilo, "kilo", false, "Output station distances in kilometers")
 	flag.Parse()
 
 	// Get API and stations from the configuration file in the current directory or HOME directory
 	err = findConfigSettings(&myConfig)
 	if err != nil {
 		log.Println("Config file not found. It should look like this and be in 'weatherstem.json', either in the current or in your $HOME/.config directory.")
-		log.Println(`{"version":"1.0","api_url":"https://domain.weatherstem.com/api","api_key":"yourApiKey","stations":["station1","stationX"]}`)
+		log.Println(`{"version":"2.0","api_url":"https://domain.weatherstem.com/api","api_key":"yourApiKey","stations":["station1","stationX"],"me":{"lat":43.14,"lon":-111.275}}`)
 		os.Exit(3)
 	}
 
@@ -435,6 +452,13 @@ func main() {
 	unitArr := make([]WeatherUnits, len(weatherArr))
 	for idx, stationData := range weatherArr {
 		dataArr[idx], unitArr[idx] = PopulateWeatherData(&stationData, rose)
+		if kilo {
+			dataArr[idx].StationDist = haversine.DistanceKm(myConfig.Me, dataArr[idx].StationTopo)
+			unitArr[idx].StationDist = "km"
+		} else {
+			dataArr[idx].StationDist = haversine.DistanceNM(myConfig.Me, dataArr[idx].StationTopo)
+			unitArr[idx].StationDist = "NM"
+		}
 	}
 
 	// Show the original raw info
