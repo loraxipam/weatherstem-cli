@@ -20,12 +20,14 @@ FYI, if you run it with no config file, it will complain and show you an example
 If you want to see it on the screen, just run it.  
 If you want to output JSON, you can use the `-json` flag.  
 If you want distances in kilometers, use `-kilo`.  
+If you want compact output (few units), use `-lite`.  
 If you want to see the full gory details of the complete API call, use the `-orig` flag.  
 If you want boring compass rose directions, use `-rose`.  
 
 ```
   -json  Output cooked data as JSON
   -kilo  Output station distances in kilometers
+  -lite  Output lightweight cooked data
   -orig  Output original API results
   -rose  Output boring compass rose directions
 ```
