@@ -101,8 +101,8 @@ type WeatherUnits struct {
 	Label       string    `json:"label"`
 	Station     [3]string `json:"stations"`
 	StationTopo struct {
-		Lat string `json:"lat"`
-		Lon string `json:"lon"`
+		Lat string `json:"Lat"`
+		Lon string `json:"Lon"`
 	} `json:"topo"`
 	StationDist   string    `json:"distance"`
 	Temperature   [5]string `json:"temp"`
@@ -178,6 +178,9 @@ func PopulateWeatherData(winfo *WeatherInfo, rose bool) (wdata WeatherData, wuni
 	wdata.StationTopo.Lon, _ = strconv.ParseFloat(winfo.WeatherStation.Longitude, 64)
 	wdata.StationDist = 2.4
 	wunits.Label = "units"
+	wunits.Station[0] = winfo.WeatherStation.Handle
+	wunits.Station[1] = winfo.WeatherStation.Name
+	wunits.Station[2] = winfo.WeatherRecord.ReadingsTimestamp
 	wunits.StationTopo.Lat = "&deg;"
 	wunits.StationTopo.Lon = "&deg;"
 	// now loop through the readings and do the conversions
