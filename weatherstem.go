@@ -12,6 +12,7 @@ import (
 
 	json "github.com/json-iterator/go"
 
+	"github.com/loraxipam/compassrose"
 	"github.com/loraxipam/haversine"
 
 	"fmt"
@@ -19,8 +20,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/loraxipam/compassrose"
 )
 
 const (
@@ -391,36 +390,38 @@ func (data *WeatherData) PrintWeatherData() {
 	fmt.Println(" ", " T:", data.Temperature[0], "DP:", data.Temperature[1], "H:", data.Humidity)
 	fmt.Println(" ", "WB:", data.Temperature[2], "WC:", data.Temperature[3], "HI:", data.Temperature[4])
 	fmt.Println(" ", " P:", data.Pressure, data.PressureTrend)
-	fmt.Println(" ", " W:", data.Windspeed[0], data.Wind[1], "("+strconv.FormatFloat(data.Windspeed[2], 'f', 0, 64)+"°)", data.Windspeed[1], "gust")
+	fmt.Println(" ", " W:", data.Windspeed[0], data.Windspeed[1], "gust", "("+strconv.FormatFloat(data.Windspeed[2], 'f', 0, 64)+"°", data.Wind[1]+")")
 	fmt.Println(" ", " R:", data.Rain[0], "gauge", data.Rain[1], "rate")
 }
 
 // PrintWeatherDataUnits shows the data for a station along with its units
 func (data *WeatherData) PrintWeatherDataUnits(wu *WeatherUnits) {
 
+	// Many of the unit strings are HTML-escaped
 	fmt.Printf("%s (%s) %.2f%s %s\n", data.Station[1], data.Station[0], data.StationDist, wu.StationDist, data.Station[2])
 	fmt.Printf(" T: %-.1f%s DP: %-.1f%s H: %.1f%s\n", data.Temperature[0], html.UnescapeString(wu.Temperature[0]), data.Temperature[1], html.UnescapeString(wu.Temperature[1]), data.Humidity, "%")
 	fmt.Printf("WB: %-.1f%s WC: %-.1f%s HI: %-.1f%s\n", data.Temperature[2], html.UnescapeString(wu.Temperature[2]), data.Temperature[3], html.UnescapeString(wu.Temperature[3]), data.Temperature[4], html.UnescapeString(wu.Temperature[4]))
 	fmt.Printf(" P: %.3f%s [%.2fmbar] %v\n", data.Pressure, wu.Pressure, data.Pressure*33.86386, data.PressureTrend) // Major assumption here!
-	fmt.Printf(" W: %.1f%s %s %v%v %.1f%s gust\n", data.Windspeed[0], wu.Windspeed[0], data.Wind[1], data.Windspeed[2], html.UnescapeString(wu.Windspeed[2]), data.Windspeed[1], html.UnescapeString(wu.Windspeed[1]))
+	fmt.Printf(" W: %.1f%s %.1f%s gust, %v%v %s\n", data.Windspeed[0], wu.Windspeed[0], data.Windspeed[1], html.UnescapeString(wu.Windspeed[1]), data.Windspeed[2], html.UnescapeString(wu.Windspeed[2]), data.Wind[1])
 	fmt.Printf(" R: %.2f%s %.2f%s\n", data.Rain[0], wu.Rain[0], data.Rain[1], wu.Rain[1])
 }
 
 func main() {
 
 	var (
-		weatherBytes                       []byte
-		err                                error
-		weatherArr                         []WeatherInfo
-		myConfig                           configSettings
-		outputJSON, outputOrig, rose, kilo bool
+		weatherBytes                             []byte
+		err                                      error
+		weatherArr                               []WeatherInfo
+		myConfig                                 configSettings
+		outputJSON, outputOrig, rose, kilo, lite bool
 	)
 
 	// Get the commandline flags
 	flag.BoolVar(&outputJSON, "json", false, "Output cooked data as JSON")
+	flag.BoolVar(&kilo, "kilo", false, "Output station distances in kilometers")
+	flag.BoolVar(&lite, "lite", false, "Output lightweight cooked data")
 	flag.BoolVar(&outputOrig, "orig", false, "Output original API results")
 	flag.BoolVar(&rose, "rose", false, "Output boring compass rose directions")
-	flag.BoolVar(&kilo, "kilo", false, "Output station distances in kilometers")
 	flag.Parse()
 
 	// Get API and stations from the configuration file in the current directory or HOME directory
@@ -473,7 +474,11 @@ func main() {
 			if outputJSON {
 				dataArr[i].PrintWeatherDataJSON(&unitArr[i])
 			} else {
-				dataArr[i].PrintWeatherDataUnits(&unitArr[i])
+				if lite {
+					dataArr[i].PrintWeatherData()
+				} else {
+					dataArr[i].PrintWeatherDataUnits(&unitArr[i])
+				}
 			}
 		}
 	}
