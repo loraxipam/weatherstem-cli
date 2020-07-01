@@ -13,7 +13,7 @@ import (
 	json "github.com/json-iterator/go"
 
 	"github.com/loraxipam/compassrose"
-	"github.com/loraxipam/haversine"
+	haversine "github.com/loraxipam/havers2"
 
 	"fmt"
 	"io/ioutil"
@@ -176,6 +176,7 @@ func PopulateWeatherData(winfo *WeatherInfo, rose bool) (wdata WeatherData, wuni
 	wdata.Station[2] = winfo.WeatherRecord.ReadingsTimestamp
 	wdata.StationTopo.Lat, _ = strconv.ParseFloat(winfo.WeatherStation.Latitude, 64)
 	wdata.StationTopo.Lon, _ = strconv.ParseFloat(winfo.WeatherStation.Longitude, 64)
+	wdata.StationTopo.Calc()
 	wdata.StationDist = 2.4
 	wunits.Label = "units"
 	wunits.Station[0] = winfo.WeatherStation.Handle
@@ -306,6 +307,8 @@ func (config *configSettings) getConfigSettings(inputFile string) (err error) {
 	} else {
 		log.Panicf("Config version mismatch, %v should be %v\n", configVersion, configSettingsVersion)
 	}
+
+	config.Me.Calc()
 
 	return err
 }

@@ -5,7 +5,7 @@ When you just want a quick peek at the local weather, here's a tool to query wea
 ## Dependencies
 
    - github.com/loraxipam/compassrose
-   - github.com/loraxipam/haversine
+   - github.com/loraxipam/havers2
 
 ## Setup
 
