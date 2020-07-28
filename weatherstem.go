@@ -23,10 +23,13 @@ import (
 )
 
 const (
+	// Version of the configuration file layout
 	configSettingsVersion = "2.0"
 )
 
 // WeatherInfo struct
+// This is the primary structure for weather data which includes the recording station
+// info as well as the data series
 type WeatherInfo struct {
 	WeatherRecord  RecordInfo  `json:"record"`
 	WeatherStation StationInfo `json:"station"`
@@ -48,6 +51,7 @@ type RecordInfo struct {
 }
 
 // StationInfo struct
+// This is the basic info about the site which recorded the weather data
 type StationInfo struct {
 	Domain         DomainInfo   `json:"domain"`
 	Cameras        []CameraInfo `json:"cameras"`
@@ -96,7 +100,7 @@ type WeatherData struct {
 	Sun           [2]float64      `json:"sun"`
 }
 
-// WeatherUnits are the measurement units for the WeatherData values
+// WeatherUnits are the corresponding measurement units for WeatherData values
 type WeatherUnits struct {
 	Label       string    `json:"label"`
 	Station     [3]string `json:"stations"`
@@ -115,7 +119,7 @@ type WeatherUnits struct {
 	Sun           [2]string `json:"sun"`
 }
 
-// ReadingInfo struct
+// ReadingInfo struct describes each measurement
 type ReadingInfo struct {
 	ID            string `json:"id"`
 	Sensor        string `json:"sensor"`
@@ -127,6 +131,8 @@ type ReadingInfo struct {
 }
 
 // HiloInfo This is at least what comes back with Temp info
+// and describes the station's maximum/minimum readings over the latest
+// time window, usually 24 hours
 type HiloInfo struct {
 	Name             string `json:"name"`
 	Minimum          string `json:"min"`
@@ -139,13 +145,13 @@ type HiloInfo struct {
 	Unit             string `json:"unit"`
 }
 
-// DomainInfo struct
+// DomainInfo struct is basically the alias for the individual WeatherSTEM stations
 type DomainInfo struct {
 	Name   string `json:"name"`
 	Handle string `json:"handle"`
 }
 
-// CameraInfo struct
+// CameraInfo struct describes pointers to recent images from the station camera
 type CameraInfo struct {
 	ImageURL string `json:"image"`
 	Name     string `json:"name"`
@@ -159,6 +165,7 @@ type CameraInfo struct {
 // "me": {"lat":29.13,"lon":-80.95}
 // }
 // See weatherstem API page for details.
+// This is version 2. -- Added "Me"
 type configSettings struct {
 	Version  string          `json:"version"`
 	URL      string          `json:"api_url"`
@@ -242,7 +249,7 @@ func PopulateWeatherData(winfo *WeatherInfo, rose bool) (wdata WeatherData, wuni
 	return wdata, wunits
 }
 
-// get config settings from the usual suspect files
+// get config settings from the usual suspect files. Look in current directory, HOME or .config
 func findConfigSettings(config *configSettings) (err error) {
 	var usualFiles [3]string
 	if home, exists := os.LookupEnv("HOME"); exists {
@@ -342,21 +349,21 @@ func getWeatherInfoFromWeb(c *configSettings) ([]byte, error) {
 	body := strings.NewReader(requestBody)
 
 	// Make the call
-	responseBody, error := client.Post(apiURL, "application/json", body)
-	if error != nil {
-		return nil, error
+	responseBody, err := client.Post(apiURL, "application/json", body)
+	if err != nil {
+		return nil, err
 	}
 
 	// Close the session once we're done
 	defer responseBody.Body.Close()
 
 	// Now parse the result
-	apiResponse, error := ioutil.ReadAll(responseBody.Body)
+	apiResponse, err := ioutil.ReadAll(responseBody.Body)
 
-	return apiResponse, error
+	return apiResponse, err
 }
 
-// PrintWeatherDataJSON shows the data for a station
+// PrintWeatherDataJSON shows the data and the measurement units for a station
 func (data *WeatherData) PrintWeatherDataJSON(units *WeatherUnits) {
 	var jdata, junits []byte
 	var err error
@@ -376,7 +383,7 @@ func (data *WeatherData) PrintWeatherDataJSON(units *WeatherUnits) {
 	fmt.Printf("%s\n", string(junits))
 }
 
-// PrintWeatherInfoJSON shows the data for a station
+// PrintWeatherInfoJSON shows the data only for a station. No units.
 func (data *WeatherInfo) PrintWeatherInfoJSON() {
 	var jdata []byte
 	var err error
@@ -389,12 +396,29 @@ func (data *WeatherInfo) PrintWeatherInfoJSON() {
 	fmt.Printf("%s\n", string(jdata))
 }
 
-// PrintWeatherData shows the data for a station
+// WBGTFlag returns the "danger" flag for a given wet bulb globe temperature
+func WBGTFlag ( temp float64 ) (flag string) {
+	switch {
+	case (temp < 80.0):
+		return " "
+	case (temp < 85.0):
+		return "."
+	case (temp < 88.0):
+		return "o"
+	case (temp < 90.0):
+		return "O"
+	default:
+		return "!"
+	}
+
+}
+
+// PrintWeatherData shows the (REAL basic) data for a station
 func (data *WeatherData) PrintWeatherData() {
 
 	fmt.Println(data.Station[1], "("+data.Station[0]+")", data.Station[2], data.StationDist)
 	fmt.Println(" ", " T:", data.Temperature[0], "DP:", data.Temperature[1], "H:", data.Humidity)
-	fmt.Println(" ", "WB:", data.Temperature[2], "WC:", data.Temperature[3], "HI:", data.Temperature[4])
+	fmt.Println(WBGTFlag(data.Temperature[2]), "WB:", data.Temperature[2], "WC:", data.Temperature[3], "HI:", data.Temperature[4])
 	fmt.Println(" ", " P:", data.Pressure, data.PressureTrend)
 	fmt.Println(" ", " W:", data.Windspeed[0], data.Windspeed[1], "gust", "("+strconv.FormatFloat(data.Windspeed[2], 'f', 0, 64)+"°", data.Wind[1]+")")
 	fmt.Println(" ", " R:", data.Rain[0], "gauge", data.Rain[1], "rate")
@@ -406,20 +430,21 @@ func (data *WeatherData) PrintWeatherDataUnits(wu *WeatherUnits) {
 	// Many of the unit strings are HTML-escaped
 	fmt.Printf("%s (%s) %.2f%s %s\n", data.Station[1], data.Station[0], data.StationDist, wu.StationDist, data.Station[2])
 	fmt.Printf(" T: %-.1f%s DP: %-.1f%s H: %.1f%s\n", data.Temperature[0], html.UnescapeString(wu.Temperature[0]), data.Temperature[1], html.UnescapeString(wu.Temperature[1]), data.Humidity, "%")
-	fmt.Printf("WB: %-.1f%s WC: %-.1f%s HI: %-.1f%s\n", data.Temperature[2], html.UnescapeString(wu.Temperature[2]), data.Temperature[3], html.UnescapeString(wu.Temperature[3]), data.Temperature[4], html.UnescapeString(wu.Temperature[4]))
+	fmt.Printf("WB: %-.1f%s %s WC: %-.1f%s HI: %-.1f%s\n", data.Temperature[2], html.UnescapeString(wu.Temperature[2]), WBGTFlag(data.Temperature[2]),data.Temperature[3], html.UnescapeString(wu.Temperature[3]), data.Temperature[4], html.UnescapeString(wu.Temperature[4]))
 	fmt.Printf(" P: %.3f%s [%.2fmbar] %v\n", data.Pressure, wu.Pressure, data.Pressure*33.86386, data.PressureTrend) // Major assumption here!
 	fmt.Printf(" W: %.1f%s %.1f%s gust, %v%v %s\n", data.Windspeed[0], wu.Windspeed[0], data.Windspeed[1], html.UnescapeString(wu.Windspeed[1]), data.Windspeed[2], html.UnescapeString(wu.Windspeed[2]), data.Wind[1])
 	fmt.Printf(" R: %.2f%s %.2f%s\n", data.Rain[0], wu.Rain[0], data.Rain[1], wu.Rain[1])
 }
 
+// main body function
 func main() {
 
 	var (
-		weatherBytes                             []byte
+		weatherBytes                             []byte			// The API returns a JSON array of stations with their data
 		err                                      error
-		weatherArr                               []WeatherInfo
-		myConfig                                 configSettings
-		outputJSON, outputOrig, rose, kilo, lite bool
+		weatherArr                               []WeatherInfo		// The structured API data
+		myConfig                                 configSettings		// Your API user info, location and local WeatherSTEM sites
+		outputJSON, outputOrig, rose, kilo, lite bool			// Some command line flags
 	)
 
 	// Get the commandline flags
@@ -439,7 +464,6 @@ func main() {
 	}
 
 	// Get local WeatherSTEM data
-	// weatherBytes, _ := getPonceInfoFromFile()
 	weatherBytes, err = getWeatherInfoFromWeb(&myConfig)
 	if err != nil {
 		log.Println("Call to API failed.", err)
