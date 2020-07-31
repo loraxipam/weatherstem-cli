@@ -398,17 +398,18 @@ func (data *WeatherInfo) PrintWeatherInfoJSON() {
 
 // WBGTFlag returns the "danger" flag for a given wet bulb globe temperature
 func WBGTFlag ( temp float64 ) (flag string) {
+	var runeflag = []rune("⚊⚌☰⚑")
 	switch {
-	case (temp < 80.0):
+	case (temp < 82.0):
 		return " "
-	case (temp < 85.0):
-		return "."
-	case (temp < 88.0):
-		return "o"
+	case (temp < 87.0):
+		return string(runeflag[0])
 	case (temp < 90.0):
-		return "O"
+		return string(runeflag[1])
+	case (temp < 92.0):
+		return string(runeflag[2])
 	default:
-		return "!"
+		return string(runeflag[3])
 	}
 
 }
@@ -454,6 +455,16 @@ func main() {
 	flag.BoolVar(&outputOrig, "orig", false, "Output original API results")
 	flag.BoolVar(&rose, "rose", false, "Output boring compass rose directions")
 	flag.Parse()
+
+	if flag.NArg() > 0 {
+		fmt.Println("Current WBGT flags:")
+		fmt.Println("   <82°F       - normal")
+		fmt.Println(" ⚊ 82°F - 87°F - Level 1")
+		fmt.Println(" ⚌ 87°F - 90°F - Level 2")
+		fmt.Println(" ☰ 90°F - 92°F - Level 3")
+		fmt.Println(" ⚑ >92°F       - Level 4")
+		os.Exit(0)
+	}
 
 	// Get API and stations from the configuration file in the current directory or HOME directory
 	err = findConfigSettings(&myConfig)
