@@ -24,7 +24,7 @@ import (
 
 const (
 	// Version of the configuration file layout
-	configSettingsVersion = "2.0"
+	configSettingsVersion = "3.0"
 )
 
 // WeatherInfo struct
@@ -300,7 +300,9 @@ func (config *configSettings) getConfigSettings(inputFile string) (err error) {
 			log.Panicln("Cannot unmarshal config", inputFile)
 		}
 	} else if configVersion <= configSettingsVersion {
-		log.Printf("WARNING: Using a version %s config file in a version %s app. Your location could become NYC.\n", configVersion, configSettingsVersion)
+		log.Printf("WARNING: Using a version %s config file in a version %s app.\n", configVersion, configSettingsVersion)
+		log.Printf("Version 2 added your geolocation. Your location could become NYC.\n")
+		log.Printf("Version 3 uses the Aug 2020 API v1 'station@domain.weatherstem.com' syntax.\n")
 		err = json.Unmarshal(configJSON, &config)
 		if err != nil {
 			log.Panicln("Cannot unmarshal config", inputFile)
@@ -470,7 +472,7 @@ func main() {
 	err = findConfigSettings(&myConfig)
 	if err != nil {
 		log.Println("Config file not found. It should look like this and be in 'weatherstem.json', either in the current or in your $HOME/.config directory.")
-		log.Println(`{"version":"2.0","api_url":"https://domain.weatherstem.com/api","api_key":"yourApiKey","stations":["station1","stationX"],"me":{"lat":43.14,"lon":-111.275}}`)
+		log.Println(`{"version":"3.0","api_url":"https://api.weatherstem.com/api","api_key":"yourApiKey","stations":["station1@domain.weatherstem.com","stationX@domain.weatherstem.com"],"me":{"lat":43.14,"lon":-111.275}}`)
 		os.Exit(3)
 	}
 
