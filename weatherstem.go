@@ -1,6 +1,7 @@
 // My local area WeatherSTEM data.
 // Sign up for an API key and create a little JSON config file in it.
 
+// main package for weatherstem CLI tool as a command line application
 package main
 
 import (
@@ -447,12 +448,13 @@ func main() {
 		err                                      error
 		weatherArr                               []WeatherInfo		// The structured API data
 		myConfig                                 configSettings		// Your API user info, location and local WeatherSTEM sites
-		outputJSON, outputOrig, rose, kilo, lite bool			// Some command line flags
+		outputJSON, outputOrig, rose, kilo, mile, lite bool		// Some command line flags
 	)
 
 	// Get the commandline flags
 	flag.BoolVar(&outputJSON, "json", false, "Output cooked data as JSON")
 	flag.BoolVar(&kilo, "kilo", false, "Output station distances in kilometers")
+	flag.BoolVar(&mile, "mile", false, "Output station distances in statute miles")
 	flag.BoolVar(&lite, "lite", false, "Output lightweight cooked data")
 	flag.BoolVar(&outputOrig, "orig", false, "Output original API results")
 	flag.BoolVar(&rose, "rose", false, "Output boring compass rose directions")
@@ -499,6 +501,9 @@ func main() {
 		if kilo {
 			dataArr[idx].StationDist = haversine.DistanceKm(myConfig.Me, dataArr[idx].StationTopo)
 			unitArr[idx].StationDist = "km"
+		} else if mile {
+			dataArr[idx].StationDist = haversine.DistanceMi(myConfig.Me, dataArr[idx].StationTopo)
+			unitArr[idx].StationDist = "mi"
 		} else {
 			dataArr[idx].StationDist = haversine.DistanceNM(myConfig.Me, dataArr[idx].StationTopo)
 			unitArr[idx].StationDist = "NM"
